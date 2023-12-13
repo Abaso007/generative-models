@@ -18,12 +18,12 @@ class Img2ImgDiscretizationWrapper:
     def __call__(self, *args, **kwargs):
         # sigmas start large first, and decrease then
         sigmas = self.discretization(*args, **kwargs)
-        print(f"sigmas after discretization, before pruning img2img: ", sigmas)
+        print("sigmas after discretization, before pruning img2img: ", sigmas)
         sigmas = torch.flip(sigmas, (0,))
         sigmas = sigmas[: max(int(self.strength * len(sigmas)), 1)]
         print("prune index:", max(int(self.strength * len(sigmas)), 1))
         sigmas = torch.flip(sigmas, (0,))
-        print(f"sigmas after pruning: ", sigmas)
+        print("sigmas after pruning: ", sigmas)
         return sigmas
 
 
@@ -45,15 +45,12 @@ class Txt2NoisyDiscretizationWrapper:
     def __call__(self, *args, **kwargs):
         # sigmas start large first, and decrease then
         sigmas = self.discretization(*args, **kwargs)
-        print(f"sigmas after discretization, before pruning img2img: ", sigmas)
+        print("sigmas after discretization, before pruning img2img: ", sigmas)
         sigmas = torch.flip(sigmas, (0,))
-        if self.original_steps is None:
-            steps = len(sigmas)
-        else:
-            steps = self.original_steps + 1
+        steps = len(sigmas) if self.original_steps is None else self.original_steps + 1
         prune_index = max(min(int(self.strength * steps) - 1, steps - 1), 0)
         sigmas = sigmas[prune_index:]
         print("prune index:", prune_index)
         sigmas = torch.flip(sigmas, (0,))
-        print(f"sigmas after pruning: ", sigmas)
+        print("sigmas after pruning: ", sigmas)
         return sigmas

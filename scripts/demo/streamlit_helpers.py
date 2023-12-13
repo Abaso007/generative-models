@@ -38,7 +38,7 @@ from sgm.util import append_dims, default, instantiate_from_config
 @st.cache_resource()
 def init_st(version_dict, load_ckpt=True, load_filter=True):
     state = dict()
-    if not "model" in state:
+    if "model" not in state:
         config = version_dict["config"]
         ckpt = version_dict["ckpt"]
 
@@ -99,8 +99,6 @@ def load_model_from_config(config, ckpt=None, verbose=True):
         else:
             raise NotImplementedError
 
-        msg = None
-
         m, u = model.load_state_dict(sd, strict=False)
 
         if len(m) > 0 and verbose:
@@ -109,8 +107,7 @@ def load_model_from_config(config, ckpt=None, verbose=True):
         if len(u) > 0 and verbose:
             print("unexpected keys:")
             print(u)
-    else:
-        msg = None
+    msg = None
 
     model = initial_model_load(model)
     model.eval()
@@ -118,7 +115,7 @@ def load_model_from_config(config, ckpt=None, verbose=True):
 
 
 def get_unique_embedder_keys_from_conditioner(conditioner):
-    return list(set([x.input_key for x in conditioner.embedders]))
+    return list({x.input_key for x in conditioner.embedders})
 
 
 def init_embedder_options(keys, init_dict, prompt=None, negative_prompt=None):
@@ -253,7 +250,7 @@ def get_guider(options, key):
             min_value=1.0,
         )
         min_scale = st.number_input(
-            f"min guidance scale",
+            "min guidance scale",
             value=options.get("min_cfg", 1.0),
             min_value=1.0,
             max_value=10.0,
@@ -357,7 +354,7 @@ def get_discretization(discretization, options, key=1):
 
 
 def get_sampler(sampler_name, steps, discretization_config, guider_config, key=1):
-    if sampler_name == "EulerEDMSampler" or sampler_name == "HeunEDMSampler":
+    if sampler_name in ["EulerEDMSampler", "HeunEDMSampler"]:
         s_churn = st.sidebar.number_input(f"s_churn #{key}", value=0.0, min_value=0.0)
         s_tmin = st.sidebar.number_input(f"s_tmin #{key}", value=0.0, min_value=0.0)
         s_tmax = st.sidebar.number_input(f"s_tmax #{key}", value=999.0, min_value=0.0)
@@ -385,10 +382,7 @@ def get_sampler(sampler_name, steps, discretization_config, guider_config, key=1
                 s_noise=s_noise,
                 verbose=True,
             )
-    elif (
-        sampler_name == "EulerAncestralSampler"
-        or sampler_name == "DPMPP2SAncestralSampler"
-    ):
+    elif sampler_name in ["EulerAncestralSampler", "DPMPP2SAncestralSampler"]:
         s_noise = st.sidebar.number_input("s_noise", value=1.0, min_value=0.0)
         eta = st.sidebar.number_input("eta", value=1.0, min_value=0.0)
 
@@ -436,7 +430,7 @@ def get_interactive_image() -> Image.Image:
     image = st.file_uploader("Input", type=["jpg", "JPEG", "png"])
     if image is not None:
         image = Image.open(image)
-        if not image.mode == "RGB":
+        if image.mode != "RGB":
             image = image.convert("RGB")
         return image
 
@@ -459,9 +453,9 @@ def load_img(
         transform.append(transforms.Resize(size))
     if center_crop:
         transform.append(transforms.CenterCrop(size))
-    transform.append(transforms.ToTensor())
-    transform.append(transforms.Lambda(lambda x: 2.0 * x - 1.0))
-
+    transform.extend(
+        (transforms.ToTensor(), transforms.Lambda(lambda x: 2.0 * x - 1.0))
+    )
     transform = transforms.Compose(transform)
     img = transform(image)[None, ...]
     st.text(f"input min/max/mean: {img.min():.3f}/{img.max():.3f}/{img.mean():.3f}")
@@ -503,11 +497,7 @@ def do_sample(
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
-                if T is not None:
-                    num_samples = [num_samples, T]
-                else:
-                    num_samples = [num_samples]
-
+                num_samples = [num_samples, T] if T is not None else [num_samples]
                 load_model(model.conditioner)
                 batch, batch_uc = get_batch(
                     get_unique_embedder_keys_from_conditioner(model.conditioner),
@@ -526,7 +516,7 @@ def do_sample(
                 unload_model(model.conditioner)
 
                 for k in c:
-                    if not k == "crossattn":
+                    if k != "crossattn":
                         c[k], uc[k] = map(
                             lambda y: y[k][: math.prod(num_samples)].to("cuda"), (c, uc)
                         )
@@ -592,9 +582,7 @@ def do_sample(
                             f"Sample #{i} as image",
                         )
 
-                if return_latents:
-                    return samples, samples_z
-                return samples
+                return (samples, samples_z) if return_latents else samples
 
 
 def get_batch(
@@ -684,7 +672,7 @@ def get_batch(
     if T is not None:
         batch["num_video_frames"] = T
 
-    for key in batch.keys():
+    for key in batch:
         if key not in batch_uc and isinstance(batch[key], torch.Tensor):
             batch_uc[key] = torch.clone(batch[key])
         elif key in additional_batch_uc_fields and key not in batch_uc:
@@ -778,9 +766,7 @@ def do_img2img(
 
                 grid = rearrange(grid, "n b c h w -> (n h) (b w) c")
                 outputs.image(grid.cpu().numpy())
-                if return_latents:
-                    return samples, samples_z
-                return samples
+                return (samples, samples_z) if return_latents else samples
 
 
 def get_resizing_factor(
@@ -788,31 +774,30 @@ def get_resizing_factor(
 ) -> float:
     r_bound = desired_shape[1] / desired_shape[0]
     aspect_r = current_shape[1] / current_shape[0]
-    if r_bound >= 1.0:
-        if aspect_r >= r_bound:
-            factor = min(desired_shape) / min(current_shape)
-        else:
-            if aspect_r < 1.0:
-                factor = max(desired_shape) / min(current_shape)
-            else:
-                factor = max(desired_shape) / max(current_shape)
+    if (
+        r_bound >= 1.0
+        and aspect_r >= r_bound
+        or r_bound < 1.0
+        and aspect_r <= r_bound
+    ):
+        return min(desired_shape) / min(current_shape)
+    elif r_bound >= 1.0:
+        return (
+            max(desired_shape) / min(current_shape)
+            if aspect_r < 1.0
+            else max(desired_shape) / max(current_shape)
+        )
+    elif aspect_r > 1:
+        return max(desired_shape) / min(current_shape)
     else:
-        if aspect_r <= r_bound:
-            factor = min(desired_shape) / min(current_shape)
-        else:
-            if aspect_r > 1:
-                factor = max(desired_shape) / min(current_shape)
-            else:
-                factor = max(desired_shape) / max(current_shape)
-
-    return factor
+        return max(desired_shape) / max(current_shape)
 
 
 def get_interactive_image(key=None) -> Image.Image:
     image = st.file_uploader("Input", type=["jpg", "JPEG", "png"], key=key)
     if image is not None:
         image = Image.open(image)
-        if not image.mode == "RGB":
+        if image.mode != "RGB":
             image = image.convert("RGB")
         return image
 
@@ -877,7 +862,7 @@ def save_video_as_grid_and_mp4(
 
         writer.release()
 
-        video_path_h264 = video_path[:-4] + "_h264.mp4"
+        video_path_h264 = f"{video_path[:-4]}_h264.mp4"
         os.system(f"ffmpeg -i {video_path} -c:v libx264 {video_path_h264}")
 
         with open(video_path_h264, "rb") as f:

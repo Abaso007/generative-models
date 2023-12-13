@@ -58,7 +58,7 @@ class DeepFloydDataFiltering(object):
     def __call__(self, images: torch.Tensor) -> torch.Tensor:
         imgs = clip_process_images(images)
         if self._device is None:
-            self._device = next(p for p in self.clip_model.parameters()).device
+            self._device = next(iter(self.clip_model.parameters())).device
         image_features = self.clip_model.encode_image(imgs.to(self._device))
         image_features = image_features.detach().cpu().numpy().astype(np.float16)
         p_pred = predict_proba(image_features, self.cpu_p_weights, self.cpu_p_biases)
@@ -77,7 +77,7 @@ class DeepFloydDataFiltering(object):
 
 def load_img(path: str) -> torch.Tensor:
     image = Image.open(path)
-    if not image.mode == "RGB":
+    if image.mode != "RGB":
         image = image.convert("RGB")
     image_transforms = T.Compose(
         [
