@@ -75,7 +75,7 @@ def sample(
     path = Path(input_path)
     all_img_paths = []
     if path.is_file():
-        if any([input_path.endswith(x) for x in ["jpg", "jpeg", "png"]]):
+        if any(input_path.endswith(x) for x in ["jpg", "jpeg", "png"]):
             all_img_paths = [input_path]
         else:
             raise ValueError("Path is not valid image file.")
@@ -204,7 +204,7 @@ def sample(
 
 
 def get_unique_embedder_keys_from_conditioner(conditioner):
-    return list(set([x.input_key for x in conditioner.embedders]))
+    return list({x.input_key for x in conditioner.embedders})
 
 
 def get_batch(keys, value_dict, N, T, device):
@@ -242,7 +242,7 @@ def get_batch(keys, value_dict, N, T, device):
     if T is not None:
         batch["num_video_frames"] = T
 
-    for key in batch.keys():
+    for key in batch:
         if key not in batch_uc and isinstance(batch[key], torch.Tensor):
             batch_uc[key] = torch.clone(batch[key])
     return batch, batch_uc

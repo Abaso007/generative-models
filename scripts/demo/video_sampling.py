@@ -92,17 +92,9 @@ VERSION2SPECS = {
 
 if __name__ == "__main__":
     st.title("Stable Video Diffusion")
-    version = st.selectbox(
-        "Model Version",
-        [k for k in VERSION2SPECS.keys()],
-        0,
-    )
+    version = st.selectbox("Model Version", list(VERSION2SPECS.keys()), 0)
     version_dict = VERSION2SPECS[version]
-    if st.checkbox("Load Model"):
-        mode = "img2vid"
-    else:
-        mode = "skip"
-
+    mode = "img2vid" if st.checkbox("Load Model") else "skip"
     H = st.sidebar.number_input(
         "H", value=version_dict["H"], min_value=64, max_value=2048
     )
@@ -165,7 +157,7 @@ if __name__ == "__main__":
 
         if st.checkbox("Overwrite fps in mp4 generator", False):
             saving_fps = st.number_input(
-                f"saving video at fps:", value=value_dict["fps"], min_value=1
+                "saving video at fps:", value=value_dict["fps"], min_value=1
             )
         else:
             saving_fps = value_dict["fps"]
